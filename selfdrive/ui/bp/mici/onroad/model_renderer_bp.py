@@ -11,6 +11,12 @@ from openpilot.bluepilot.ui.lib.bp_shaders import draw_rainbow_polygon
 from openpilot.selfdrive.ui.bp.onroad.rad_racer_road import RadRacerRoadMixin, RAD_RACER_DASH_LEN_M, RAD_RACER_GAP_LEN_M
 # BluePilot: seasonal theme packs (colors.json overrides for road colors)
 from openpilot.selfdrive.ui.bp.lib import theme_pack
+from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
+
+LEAD_RADAR_GLOW = rl.Color(0, 134, 233, 255)
+LEAD_RADAR_CHEVRON = rl.Color(0, 100, 200, 255)
+LEAD_VISION_GLOW = rl.Color(218, 202, 37, 255)
+LEAD_VISION_CHEVRON = rl.Color(201, 34, 49, 255)
 
 class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
   def __init__(self):
@@ -19,6 +25,8 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
     self._rainbow_v = 20
     self._disable_lane_line_status_color = self._bp_params.get_bool("BPDisableLaneLineStatusColor")
     self._rainbow_lane_lines = self._bp_params.get_bool("BPRainbowLines")
+    self._ford_overlay_enabled = self._bp_params.get_bool("FordPrefShowRadarLeadOverlay")
+    self._lead_is_radar = [False, False]
     # BluePilot: Rad Racer 8-bit theme (green game road; dash scroll animation state)
     self._rad_racer = theme_pack.rad_racer_active(self._bp_params)
     self._dash_phase = 0.0
@@ -42,6 +50,7 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
     if self._counter % 60 == 0:
       self._disable_lane_line_status_color = self._bp_params.get_bool("BPDisableLaneLineStatusColor")
       self._rainbow_lane_lines = self._bp_params.get_bool("BPRainbowLines")
+      self._ford_overlay_enabled = self._bp_params.get_bool("FordPrefShowRadarLeadOverlay")
       self._rad_racer = theme_pack.rad_racer_active(self._bp_params)
       self._theme_pack = theme_pack.get_active_pack()
 
@@ -53,6 +62,49 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
     if self._rad_racer and sm.valid.get('carState', False):
       period = RAD_RACER_DASH_LEN_M + RAD_RACER_GAP_LEN_M
       self._dash_phase = (self._dash_phase + max(0.0, sm['carState'].vEgo) / gui_app.target_fps) % period
+
+  def _render(self, rect: rl.Rectangle):
+    """Restore Ford lead rendering on comma four without changing control logic."""
+    super()._render(rect)
+
+    sm = ui_state.sm
+    radar_state = sm['radarState'] if sm.valid.get('radarState', False) else None
+    if not self._ford_overlay_enabled or radar_state is None or self._rad_racer:
+      bp_ui_log.visibility("MiciFordLeadOverlay", False, reason="disabled, unavailable, or themed")
+      return
+
+    path_x_array = self._path.raw_points[:, 0]
+    if path_x_array.size == 0:
+      bp_ui_log.visibility("MiciFordLeadOverlay", False, reason="no projected model path")
+      return
+
+    self._update_leads(radar_state, path_x_array)
+    leads = [radar_state.leadOne, radar_state.leadTwo]
+    for i, lead_data in enumerate(leads):
+      self._lead_is_radar[i] = bool(lead_data.status and getattr(lead_data, 'radar', False))
+
+    has_lead = any(lead.status for lead in leads)
+    bp_ui_log.visibility("MiciFordLeadOverlay", has_lead, reason="Ford stock ACC lead display")
+    if has_lead:
+      source = "RADAR" if self._lead_is_radar[0] else "VISION"
+      bp_ui_log.state("MiciFordLeadOverlay", "primary_source", source)
+      self._draw_lead_indicator()
+
+  def _draw_lead_indicator(self):
+    """Use saturated blue for radar leads and red/yellow for vision leads."""
+    for i, lead in enumerate(self._lead_vehicles):
+      if not lead.glow or not lead.chevron:
+        continue
+
+      if self._lead_is_radar[i]:
+        glow_color = LEAD_RADAR_GLOW
+        base = LEAD_RADAR_CHEVRON
+      else:
+        glow_color = LEAD_VISION_GLOW
+        base = LEAD_VISION_CHEVRON
+
+      rl.draw_triangle_fan(lead.glow, len(lead.glow), glow_color)
+      rl.draw_triangle_fan(lead.chevron, len(lead.chevron), rl.Color(base.r, base.g, base.b, lead.fill_alpha))
 
   def _draw_path(self, sm):
     # BluePilot: Rad Racer theme draws the path ribbon in _draw_rad_racer_road

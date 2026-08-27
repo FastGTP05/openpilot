@@ -6,6 +6,7 @@ from openpilot.selfdrive.ui.mici.onroad.cameraview import CameraView as MiciCame
 from openpilot.selfdrive.ui.ui_state import ui_state
 # BluePilot: unified theme selector (BPThemePack param)
 from openpilot.selfdrive.ui.bp.lib import theme_pack
+from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
 
 
 class MiciCameraViewBP(MiciCameraView):
@@ -15,6 +16,7 @@ class MiciCameraViewBP(MiciCameraView):
     super().__init__(*args, **kwargs)
     self._bp_camera_params = Params()
     self._bp_hide_camera_view = self._bp_camera_params.get_bool("BPHideCameraView")
+    self._bp_full_color_engaged = self._bp_camera_params.get_bool("BPFullColorEngaged")
     # BluePilot: Rad Racer theme draws its own scene over a black sky (mirrors TICI)
     self._bp_rad_racer_theme = theme_pack.rad_racer_active(self._bp_camera_params)
     self._bp_camera_param_counter = 0
@@ -25,7 +27,27 @@ class MiciCameraViewBP(MiciCameraView):
     if self._bp_camera_param_counter >= 60:
       self._bp_camera_param_counter = 0
       self._bp_hide_camera_view = self._bp_camera_params.get_bool("BPHideCameraView")
+      self._bp_full_color_engaged = self._bp_camera_params.get_bool("BPFullColorEngaged")
       self._bp_rad_racer_theme = theme_pack.rad_racer_active(self._bp_camera_params)
+
+  def _update_texture_color_filtering(self):
+    """Keep the comma four road feed in color when requested.
+
+    The stock MICI shader intentionally desaturates the road camera whenever controls
+    are engaged. This BP-only override leaves the driver camera enhancement untouched
+    and changes presentation only; it has no effect on model or control inputs.
+    """
+    road_stream = self._stream_type != VisionStreamType.VISION_STREAM_DRIVER
+    if self._bp_full_color_engaged and road_stream:
+      self._engaged_val[0] = 0
+      rl.set_shader_value(self.shader, self._engaged_loc, self._engaged_val,
+                          rl.ShaderUniformDataType.SHADER_UNIFORM_INT)
+      rl.set_shader_value(self.shader, self._enhance_driver_loc, self._enhance_driver_val,
+                          rl.ShaderUniformDataType.SHADER_UNIFORM_INT)
+      bp_ui_log.state("MiciCameraView", "full_color_engaged", True)
+    else:
+      bp_ui_log.state("MiciCameraView", "full_color_engaged", False)
+      super()._update_texture_color_filtering()
 
   def _should_hide_camera_view(self) -> bool:
     return (
