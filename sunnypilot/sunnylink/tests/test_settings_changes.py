@@ -198,6 +198,7 @@ class TestBluePilotLateralSchemeSplit:
     keys = {item["key"] for item in schema["vehicle_settings"]["ford"]["items"]}
     expected = {"enable_human_turn_detection_curv", "lane_change_factor_high_curv",
                 "enable_lane_positioning_curv", "custom_path_offset_curv",
+                "enable_crown_adjustment_curv", "crown_adjustment_curv",
                 "enable_lane_full_mode_curv", "custom_profile_curv",
                 "pc_blend_ratio_high_C_UI_curv", "pc_blend_ratio_low_C_UI_curv",
                 "LC_PID_gain_UI_curv"}
@@ -208,6 +209,18 @@ class TestBluePilotLateralSchemeSplit:
     assert item is not None
     refs = json.dumps(item.get("enablement") or [])
     assert "enable_lane_positioning_curv" in refs
+
+  def test_crown_adjustment_is_opt_in_and_small(self, schema):
+    toggle = _find_item(schema, "enable_crown_adjustment_curv")
+    amount = _find_item(schema, "crown_adjustment_curv")
+    assert toggle is not None and amount is not None
+    assert "enable_lane_positioning_curv" in json.dumps(toggle.get("enablement") or [])
+    refs = json.dumps(amount.get("enablement") or [])
+    assert "enable_lane_positioning_curv" in refs
+    assert "enable_crown_adjustment_curv" in refs
+    assert amount["min"] == -0.15
+    assert amount["max"] == 0.15
+    assert amount["step"] == 0.05
 
   def test_disable_toggle_and_mode_selector_lead_the_section(self, schema):
     keys = [item["key"] for item in schema["vehicle_settings"]["ford"]["items"]]

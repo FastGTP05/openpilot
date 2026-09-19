@@ -304,6 +304,10 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"pc_blend_ratio_low_C_UI_curv", {PERSISTENT | BACKUP, FLOAT, "0.4"}},
     {"enable_lane_positioning_curv", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"custom_path_offset_curv", {PERSISTENT | BACKUP, FLOAT, "0.0"}},
+    // Manual, curvature-mode-only lane-center bias for road crown experiments. This is
+    // intentionally opt-in and starts at zero; it never reads a vehicle tilt sensor.
+    {"enable_crown_adjustment_curv", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"crown_adjustment_curv", {PERSISTENT | BACKUP, FLOAT, "0.0"}},
     {"enable_lane_full_mode_curv", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"custom_profile_curv", {PERSISTENT | BACKUP, INT, "0"}},
     {"LC_PID_gain_UI_curv", {PERSISTENT | BACKUP, FLOAT, "3.0"}},

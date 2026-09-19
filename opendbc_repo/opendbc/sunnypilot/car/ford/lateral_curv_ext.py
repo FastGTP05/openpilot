@@ -189,6 +189,11 @@ class LateralCurvExt:
 
     # Path offset
     self.custom_path_offset_curv = 0.0  # from UI
+    # Explicit manual offset for testing a persistent road-crown / vehicle-bias pull.
+    # This is deliberately not an automatic roll compensation: live roll is too noisy
+    # and sign-convention-dependent to be used as a steering input without validation.
+    self.enable_crown_adjustment_curv = False
+    self.crown_adjustment_curv = 0.0
     self.path_offset_lookup_time = 0.2  # seconds
     self.min_laneline_confidence_bp = [0.6, 0.8]
     self.enable_lane_full_mode_curv = True
@@ -228,6 +233,8 @@ class LateralCurvExt:
     self.pc_blend_ratio_low_C_UI_curv = float(params.get("pc_blend_ratio_low_C_UI_curv", return_default=True))
     self.enable_lane_positioning_curv = params.get_bool("enable_lane_positioning_curv")
     self.custom_path_offset_curv = float(params.get("custom_path_offset_curv", return_default=True))
+    self.enable_crown_adjustment_curv = params.get_bool("enable_crown_adjustment_curv")
+    self.crown_adjustment_curv = float(params.get("crown_adjustment_curv", return_default=True))
     self.enable_lane_full_mode_curv = params.get_bool("enable_lane_full_mode_curv")
     self.custom_profile_curv = int(params.get("custom_profile_curv", return_default=True))
     self.LC_PID_gain_UI_curv = float(params.get("LC_PID_gain_UI_curv", return_default=True))
@@ -446,6 +453,12 @@ class LateralCurvExt:
         laneline_path_offset_scale = interp(laneline_confidence, self.min_laneline_confidence_bp, [0.0, 1.0])
         path_offset = ((path_offset_position * (1 - laneline_path_offset_scale)) +
                        (path_offset_lanelines * laneline_path_offset_scale)) + self.custom_path_offset_curv
+
+        # An optional, small manual bias for a repeatable steady pull on a known road.
+        # Gate it behind lane positioning so stock behavior stays identical unless the
+        # user intentionally enables both controls while parked.
+        if self.enable_lane_positioning_curv and self.enable_crown_adjustment_curv:
+          path_offset += self.crown_adjustment_curv
 
       # No path offset during lane changes
       if self.lane_change:
