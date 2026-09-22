@@ -168,7 +168,7 @@
     },
     {
       "name": "FordPrefShowRadarLeadOverlay",
-      "default": true,
+      "default": false,
       "type": "bool",
       "flags": ["PERSISTENT", "BACKUP"],
       "create_default": true,

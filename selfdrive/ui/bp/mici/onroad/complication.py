@@ -20,6 +20,8 @@ WIDTH = 80
 COLOR_DELTA_MS = 4.5  # ~ 10MPH
 SHADOW_DEPTH = 3
 DELAY = 3.0 #seconds to remove last lead car speed
+RADAR_COLOR = rl.Color(0, 160, 255, 255)
+VISION_COLOR = rl.Color(255, 72, 72, 255)
 
 class ComplicationType(IntEnumBase):
   off = 0
@@ -41,6 +43,7 @@ class MiciComplication(Widget):
     self._car_state = None
     self._render_type = 1
     self._last_active_time = 0.0
+    self._lead_source = "VISION"
 
     self.params = Params()
 
@@ -121,12 +124,6 @@ class MiciComplication(Widget):
     unit_pos.y -= SHADOW_DEPTH
     rl.draw_text_ex(self._font_bold, unit_text, unit_pos, UNIT_FONT_SIZE, 0, self._font_color)
 
-    size = 20
-    x = pos_x + WIDTH / 2
-    y = speed_pos.y - 10
-    chevron = [(x + (size * 1.25), y + size), (x, y), (x - (size * 1.25), y + size)]
-    rl.draw_triangle_fan(chevron, len(chevron), rl.Color(201, 34, 49, int(150 * fade_ratio)))
-
   def _render_current_speed(self, rect: rl.Rectangle) -> None:
     # BluePilot: Respect "Speedometer: Hide from Onroad Screen" (HideVEgoUI) from Visuals
     if ui_state.hide_v_ego_ui:
@@ -156,6 +153,7 @@ class MiciComplication(Widget):
     if self._render_lead_indicator:
       self._last_active_time = time.monotonic()
       self.dist = self._lead_one.dRel
+      self._lead_source = "RADAR" if getattr(self._lead_one, "radar", False) else "VISION"
       if not ui_state.is_metric:
         self.dist *= 3.28084
       fade_ratio = 1.0
@@ -166,7 +164,8 @@ class MiciComplication(Widget):
       else:
         fade_ratio = 1.0 - (delay_time / DELAY)
 
-    self._font_color = rl.Color(255, 255, 255, int(220 * fade_ratio))
+    base_color = RADAR_COLOR if self._lead_source == "RADAR" else VISION_COLOR
+    self._font_color = rl.Color(base_color.r, base_color.g, base_color.b, int(220 * fade_ratio))
     shadow_color = rl.Color(0, 0, 0, int(180 * fade_ratio))
 
     dist_text = str(round(self.dist))
@@ -185,6 +184,14 @@ class MiciComplication(Widget):
     unit_pos.x -= SHADOW_DEPTH
     unit_pos.y -= SHADOW_DEPTH
     rl.draw_text_ex(self._font_bold, unit_text, unit_pos, UNIT_FONT_SIZE, 0, self._font_color)
+
+    source_text = tr(self._lead_source)
+    source_size = measure_text_cached(self._font_bold, source_text, UNIT_FONT_SIZE)
+    source_pos = rl.Vector2(pos_x + WIDTH / 2 - source_size.x / 2, unit_pos.y + UNIT_FONT_SIZE + 5)
+    rl.draw_text_ex(self._font_bold, source_text, source_pos, UNIT_FONT_SIZE, 0, shadow_color)
+    source_pos.x -= SHADOW_DEPTH
+    source_pos.y -= SHADOW_DEPTH
+    rl.draw_text_ex(self._font_bold, source_text, source_pos, UNIT_FONT_SIZE, 0, self._font_color)
 
   def _render_lead_time(self,rect: rl.Rectangle):
     if self._render_lead_indicator and self._lead_one.vRel > 0:

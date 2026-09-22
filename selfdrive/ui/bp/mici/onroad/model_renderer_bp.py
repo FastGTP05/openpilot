@@ -12,6 +12,10 @@ from openpilot.selfdrive.ui.bp.onroad.rad_racer_road import RadRacerRoadMixin, R
 # BluePilot: seasonal theme packs (colors.json overrides for road colors)
 from openpilot.selfdrive.ui.bp.lib import theme_pack
 
+# Jason's display profile: red lane-marking overlays while engaged. This is
+# visual-only and does not affect lateral control.
+DISPLAY_LANE_MARKING_COLOR = rl.Color(255, 45, 45, 255)
+
 class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
   def __init__(self):
     super().__init__()
@@ -94,6 +98,14 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
 
   def _get_ll_color(self, prob: float, adjacent: bool, left: bool):
     """BluePilot: theme pack lane color with upstream's confidence-based alpha (disengaged stays black)."""
+    if ui_state.status == UIStatus.ENGAGED:
+      alpha = float(np.clip(prob, 0.0, 0.7))
+      return rl.Color(
+        DISPLAY_LANE_MARKING_COLOR.r,
+        DISPLAY_LANE_MARKING_COLOR.g,
+        DISPLAY_LANE_MARKING_COLOR.b,
+        int(alpha * 255),
+      )
     if self._theme_pack is not None and ui_state.status != UIStatus.DISENGAGED:
       pack_color = self._theme_pack.rl_colors().get("LaneLines")
       if pack_color is not None:
@@ -128,6 +140,10 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
 
       color = self._get_ll_color(float(1.0 - self._road_edge_stds[i]), float(self._lane_line_probs[i + 1]) < 0.25, i == 0)
       draw_polygon(self._rect, road_edge.projected_points + offset, color)
+
+  def _draw_lead_indicator(self):
+    """Use the lower-right lead readout instead of an on-road lead chevron."""
+    return
 
   def _rainbow_lane_lines_active(self, sm) -> bool:
     if not self._rainbow_lane_lines or self._disable_lane_line_status_color:

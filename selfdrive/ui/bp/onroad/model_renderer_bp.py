@@ -16,9 +16,13 @@ from openpilot.selfdrive.ui.bp.lib import theme_pack
 # BluePilot: Lane line colors by status (upstream removed LANE_LINE_COLORS dict)
 LANE_LINE_COLORS_BP = {
   UIStatus.DISENGAGED: rl.Color(0, 0, 0, 255),
-  UIStatus.ENGAGED: rl.Color(0, 255, 80, 255),
+  UIStatus.ENGAGED: rl.Color(255, 45, 45, 255),
   UIStatus.OVERRIDE: rl.Color(145, 155, 149, 255),
 }
+
+# Jason's display profile: use red for all visible lane-marking overlays while
+# engaged. This affects rendering only; it has no control or planner effect.
+DISPLAY_LANE_MARKING_COLOR = rl.Color(255, 45, 45, 255)
 
 # BluePilot: Radar/vision lead indicator colors
 LEAD_RADAR_GLOW = rl.Color(0, 134, 233, 255)
@@ -353,6 +357,9 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
       pack_color = self._theme_pack.rl_colors().get("LaneLines")
       if pack_color is not None:
         return pack_color
+
+    if ui_state.status == UIStatus.ENGAGED:
+      return DISPLAY_LANE_MARKING_COLOR
 
     if not is_current_lane or self._disable_lane_line_status_color:
       return rl.Color(255, 255, 255, 255)
