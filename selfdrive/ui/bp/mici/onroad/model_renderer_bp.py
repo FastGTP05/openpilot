@@ -12,9 +12,16 @@ from openpilot.selfdrive.ui.bp.onroad.rad_racer_road import RadRacerRoadMixin, R
 # BluePilot: seasonal theme packs (colors.json overrides for road colors)
 from openpilot.selfdrive.ui.bp.lib import theme_pack
 
-# Jason's display profile: red lane-marking overlays while engaged. This is
-# visual-only and does not affect lateral control.
-DISPLAY_LANE_MARKING_COLOR = rl.Color(255, 45, 45, 255)
+# Jason's display profile: lane-control state is shown by the two lines
+# bordering the planned lane; road edges remain red. This is visual-only.
+CONTROL_LANE_COLORS = {
+  UIStatus.ENGAGED: rl.Color(0, 220, 80, 255),
+  UIStatus.LAT_ONLY: rl.Color(0, 220, 80, 255),
+  UIStatus.OVERRIDE: rl.Color(255, 220, 0, 255),
+  UIStatus.LONG_ONLY: rl.Color(255, 45, 45, 255),
+  UIStatus.DISENGAGED: rl.Color(255, 45, 45, 255),
+}
+ROAD_BOUNDARY_COLOR = rl.Color(255, 45, 45, 255)
 
 class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
   def __init__(self):
@@ -97,21 +104,12 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
     )
 
   def _get_ll_color(self, prob: float, adjacent: bool, left: bool):
-    """BluePilot: theme pack lane color with upstream's confidence-based alpha (disengaged stays black)."""
-    if ui_state.status == UIStatus.ENGAGED:
-      alpha = float(np.clip(prob, 0.0, 0.7))
-      return rl.Color(
-        DISPLAY_LANE_MARKING_COLOR.r,
-        DISPLAY_LANE_MARKING_COLOR.g,
-        DISPLAY_LANE_MARKING_COLOR.b,
-        int(alpha * 255),
-      )
-    if self._theme_pack is not None and ui_state.status != UIStatus.DISENGAGED:
-      pack_color = self._theme_pack.rl_colors().get("LaneLines")
-      if pack_color is not None:
-        alpha = float(np.clip(prob, 0.0, 0.7)) * (pack_color.a / 255.0)
-        return rl.Color(pack_color.r, pack_color.g, pack_color.b, int(alpha * 255))
-    return super()._get_ll_color(prob, adjacent, left)
+    """Use state colors for the current lane and red for other lane markers."""
+    alpha = int(float(np.clip(prob, 0.0, 0.7)) * 255)
+    if adjacent:
+      base_color = CONTROL_LANE_COLORS.get(ui_state.status, ROAD_BOUNDARY_COLOR)
+      return rl.Color(base_color.r, base_color.g, base_color.b, alpha)
+    return rl.Color(ROAD_BOUNDARY_COLOR.r, ROAD_BOUNDARY_COLOR.g, ROAD_BOUNDARY_COLOR.b, alpha)
 
   def _draw_lane_lines(self):
     """Draw lane lines and road edges, with optional rainbow inner lane lines."""
@@ -138,7 +136,8 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
       if road_edge.projected_points.size == 0:
         continue
 
-      color = self._get_ll_color(float(1.0 - self._road_edge_stds[i]), float(self._lane_line_probs[i + 1]) < 0.25, i == 0)
+      alpha = int(float(np.clip(1.0 - self._road_edge_stds[i], 0.0, 0.7)) * 255)
+      color = rl.Color(ROAD_BOUNDARY_COLOR.r, ROAD_BOUNDARY_COLOR.g, ROAD_BOUNDARY_COLOR.b, alpha)
       draw_polygon(self._rect, road_edge.projected_points + offset, color)
 
   def _draw_lead_indicator(self):

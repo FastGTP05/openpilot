@@ -13,16 +13,17 @@ from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
 # BluePilot: seasonal theme packs (colors.json overrides for road colors)
 from openpilot.selfdrive.ui.bp.lib import theme_pack
 
-# BluePilot: Lane line colors by status (upstream removed LANE_LINE_COLORS dict)
+# Jason's display profile: the planned-lane lines communicate who has lateral
+# control, while road boundaries are always red. Rendering only; no control effect.
 LANE_LINE_COLORS_BP = {
-  UIStatus.DISENGAGED: rl.Color(0, 0, 0, 255),
-  UIStatus.ENGAGED: rl.Color(255, 45, 45, 255),
-  UIStatus.OVERRIDE: rl.Color(145, 155, 149, 255),
+  UIStatus.DISENGAGED: rl.Color(255, 45, 45, 255),
+  UIStatus.ENGAGED: rl.Color(0, 220, 80, 255),
+  UIStatus.OVERRIDE: rl.Color(255, 220, 0, 255),
+  UIStatus.LAT_ONLY: rl.Color(0, 220, 80, 255),
+  UIStatus.LONG_ONLY: rl.Color(255, 45, 45, 255),
 }
 
-# Jason's display profile: use red for all visible lane-marking overlays while
-# engaged. This affects rendering only; it has no control or planner effect.
-DISPLAY_LANE_MARKING_COLOR = rl.Color(255, 45, 45, 255)
+ROAD_BOUNDARY_COLOR = rl.Color(255, 45, 45, 255)
 
 # BluePilot: Radar/vision lead indicator colors
 LEAD_RADAR_GLOW = rl.Color(0, 134, 233, 255)
@@ -349,20 +350,8 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
     if self._hide_camera_view and ui_state.status != UIStatus.ENGAGED:
       return MINIMAL_VIEW_NEUTRAL_LANE_COLOR
 
-    if ui_state.status == UIStatus.DISENGAGED:
-      return rl.Color(0, 0, 0, 255)
-
-    # BluePilot: theme pack lane color replaces status/white coloring (disengaged stays black)
-    if self._theme_pack is not None:
-      pack_color = self._theme_pack.rl_colors().get("LaneLines")
-      if pack_color is not None:
-        return pack_color
-
-    if ui_state.status == UIStatus.ENGAGED:
-      return DISPLAY_LANE_MARKING_COLOR
-
-    if not is_current_lane or self._disable_lane_line_status_color:
-      return rl.Color(255, 255, 255, 255)
+    if not is_current_lane:
+      return ROAD_BOUNDARY_COLOR
 
     base = LANE_LINE_COLORS_BP.get(ui_state.status, LANE_LINE_COLORS_BP[UIStatus.DISENGAGED])
     brightness = np.interp(prob, [0.0, 0.5, 1.0], [0.4, 0.7, 1.0])
