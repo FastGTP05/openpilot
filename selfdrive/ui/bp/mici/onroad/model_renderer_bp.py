@@ -21,7 +21,8 @@ CONTROL_LANE_COLORS = {
   UIStatus.LONG_ONLY: rl.Color(255, 45, 45, 255),
   UIStatus.DISENGAGED: rl.Color(255, 45, 45, 255),
 }
-ROAD_BOUNDARY_COLOR = rl.Color(255, 45, 45, 255)
+# Darker, higher-contrast red for road edges and non-current lane markers.
+ROAD_BOUNDARY_COLOR = rl.Color(190, 0, 0, 255)
 
 class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
   def __init__(self):
@@ -136,7 +137,7 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
       if road_edge.projected_points.size == 0:
         continue
 
-      alpha = int(float(np.clip(1.0 - self._road_edge_stds[i], 0.0, 0.7)) * 255)
+      alpha = int(float(np.clip(1.0 - self._road_edge_stds[i], 0.0, 0.9)) * 255)
       color = rl.Color(ROAD_BOUNDARY_COLOR.r, ROAD_BOUNDARY_COLOR.g, ROAD_BOUNDARY_COLOR.b, alpha)
       draw_polygon(self._rect, road_edge.projected_points + offset, color)
 

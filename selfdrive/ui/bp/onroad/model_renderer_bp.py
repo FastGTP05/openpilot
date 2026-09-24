@@ -23,7 +23,8 @@ LANE_LINE_COLORS_BP = {
   UIStatus.LONG_ONLY: rl.Color(255, 45, 45, 255),
 }
 
-ROAD_BOUNDARY_COLOR = rl.Color(255, 45, 45, 255)
+# Darker, higher-contrast red for road edges and non-current lane markers.
+ROAD_BOUNDARY_COLOR = rl.Color(190, 0, 0, 255)
 
 # BluePilot: Radar/vision lead indicator colors
 LEAD_RADAR_GLOW = rl.Color(0, 134, 233, 255)
@@ -382,7 +383,7 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
     for i, road_edge in enumerate(self._road_edges):
       if road_edge.projected_points.size == 0:
         continue
-      edge_alpha = np.clip(1.0 - self._road_edge_stds[i], 0.0, 1.0) * 0.6
+      edge_alpha = np.clip(1.0 - self._road_edge_stds[i], 0.0, 1.0) * 0.82
       edge_base = self._road_edge_base_color()
       color = rl.Color(edge_base.r, edge_base.g, edge_base.b, int(edge_alpha * 255))
       draw_polygon(self._rect, road_edge.projected_points, color)
@@ -419,7 +420,7 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
       pack_color = self._theme_pack.rl_colors().get("RoadEdges")
       if pack_color is not None:
         return pack_color
-    return rl.Color(255, 0, 0, 255)
+    return ROAD_BOUNDARY_COLOR
 
   def _rainbow_lane_lines_active(self, sm) -> bool:
     """Return true when inner lane lines should use the rainbow shader."""
@@ -444,7 +445,7 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
         continue
       expanded_points = self._expand_polygon(road_edge.projected_points, 18.0)
       if expanded_points.size > 0:
-        glow_mult = 0.16 if self._theme_pack is not None else 0.08
+        glow_mult = 0.16 if self._theme_pack is not None else 0.12
         alpha = int(edge_alpha * glow_mult * 255)
         edge_base = self._road_edge_base_color()
         color = rl.Color(edge_base.r, edge_base.g, edge_base.b, alpha)
