@@ -58,6 +58,32 @@ def _sanitize_filename_component(component):
     return value or None
 
 
+def _create_concat_file(video_paths):
+    """Create an FFmpeg concat-demuxer manifest for route video segments.
+
+    Some comma builds ship FFmpeg without the ``concat:`` protocol, while the
+    concat demuxer is available.  A manifest also avoids putting an entire
+    route's file list into one command-line argument.
+    """
+    fd, concat_file = tempfile.mkstemp(prefix='route_concat_', suffix='.txt')
+    with os.fdopen(fd, 'w') as concat_handle:
+        concat_handle.write('ffconcat version 1.0\n')
+        for _, path in video_paths:
+            safe_path = path.replace("'", "\\'")
+            concat_handle.write(f"file '{safe_path}'\n")
+    return concat_file
+
+
+def _concat_input_args(concat_file, camera):
+    """Return input arguments for a route concat manifest."""
+    args = ['-f', 'concat', '-safe', '0']
+    if camera in HEVC_CAMERAS:
+        # Raw HEVC segments do not carry a frame-rate container hint.
+        args.extend(['-r', '20'])
+    args.extend(['-i', concat_file])
+    return args
+
+
 # ============================================================================
 # Export Filename Generation
 # ============================================================================
@@ -312,36 +338,16 @@ def generate_route_export(route_base, camera, progress_callback=None, server_sta
             pass
 
     try:
-        if camera in HEVC_CAMERAS:
-            concat_protocol = 'concat:' + '|'.join(path for _, path in video_paths)
-            ffmpeg_cmd = [
-                FFMPEG_BINARY,
-                '-loglevel', 'error',
-                '-f', 'hevc',
-                '-r', '20',
-                '-i', concat_protocol,
-                '-c', 'copy',  # Copy all streams (video + audio if available)
-                '-movflags', '+faststart',
-                '-f', 'mp4',
-                temp_output
-            ]
-        else:
-            fd, concat_file = tempfile.mkstemp(prefix='route_concat_', suffix='.txt')
-            with os.fdopen(fd, 'w') as concat_handle:
-                for _, path in video_paths:
-                    safe_path = path.replace("'", "\\'")
-                    concat_handle.write(f"file '{safe_path}'\n")
-
-            ffmpeg_cmd = [
-                FFMPEG_BINARY,
-                '-loglevel', 'error',
-                '-f', 'concat',
-                '-safe', '0',
-                '-i', concat_file,
-                '-c', 'copy',
-                '-movflags', '+faststart',
-                temp_output
-            ]
+        concat_file = _create_concat_file(video_paths)
+        ffmpeg_cmd = [
+            FFMPEG_BINARY,
+            '-loglevel', 'error',
+            *_concat_input_args(concat_file, camera),
+            '-c', 'copy',  # Copy all streams (video + audio if available)
+            '-movflags', '+faststart',
+            '-f', 'mp4',
+            temp_output
+        ]
 
         if progress_callback:
             progress_callback(0.35, "Merging video segments")
@@ -438,38 +444,17 @@ def stream_route_export(route_base, camera, response_handler, server_state=None)
     try:
         enable_performance_mode()
 
-        # Build FFmpeg command to output to stdout
-        if camera in HEVC_CAMERAS:
-            concat_protocol = 'concat:' + '|'.join(path for _, path in video_paths)
-            ffmpeg_cmd = [
-                FFMPEG_BINARY,
-                '-loglevel', 'error',
-                '-f', 'hevc',
-                '-r', '20',
-                '-i', concat_protocol,
-                '-c', 'copy',
-                '-movflags', '+faststart+frag_keyframe+empty_moov',  # Enable streaming
-                '-f', 'mp4',
-                'pipe:1'  # Output to stdout
-            ]
-        else:
-            fd, concat_file = tempfile.mkstemp(prefix='route_concat_', suffix='.txt')
-            with os.fdopen(fd, 'w') as concat_handle:
-                for _, path in video_paths:
-                    safe_path = path.replace("'", "\\'")
-                    concat_handle.write(f"file '{safe_path}'\n")
-
-            ffmpeg_cmd = [
-                FFMPEG_BINARY,
-                '-loglevel', 'error',
-                '-f', 'concat',
-                '-safe', '0',
-                '-i', concat_file,
-                '-c', 'copy',
-                '-movflags', '+faststart+frag_keyframe+empty_moov',  # Enable streaming
-                '-f', 'mp4',
-                'pipe:1'  # Output to stdout
-            ]
+        # Build FFmpeg command to output to stdout.
+        concat_file = _create_concat_file(video_paths)
+        ffmpeg_cmd = [
+            FFMPEG_BINARY,
+            '-loglevel', 'error',
+            *_concat_input_args(concat_file, camera),
+            '-c', 'copy',
+            '-movflags', '+faststart+frag_keyframe+empty_moov',  # Enable streaming
+            '-f', 'mp4',
+            'pipe:1'  # Output to stdout
+        ]
 
         route_info = f"stream-export:{route_base}:{camera}"
 
