@@ -172,13 +172,21 @@ class UpdateOpenpilotBigButton(BigButton):
     self._txt_update_icon = gui_app.texture("icons_mici/settings/device/update.png", 64, 75)
     self._txt_reboot_icon = gui_app.texture("icons_mici/settings/device/reboot.png", 64, 70)
     self._txt_up_to_date_icon = gui_app.texture("icons_mici/settings/device/up_to_date.png", 64, 64)
-    super().__init__("update sunnypilot", "", self._txt_update_icon)
+    # This is the system updater, so it checks the branch selected on this
+    # device. Avoid implying that it only updates SunnyPilot when a custom
+    # fork is installed.
+    super().__init__(self._idle_label(), "", self._txt_update_icon)
 
     self._waiting_for_updater_t: float | None = None
     self._hide_value_t: float | None = None
     self._state: UpdaterState = UpdaterState.IDLE
 
     ui_state.add_offroad_transition_callback(self.offroad_transition)
+
+  @staticmethod
+  def _idle_label() -> str:
+    branch = ui_state.params.get("UpdaterTargetBranch") or ui_state.params.get("GitBranch") or "fork"
+    return f"update FastGTP05/{branch}" if branch == "1" else f"update {branch}"
 
   def offroad_transition(self):
     if ui_state.is_offroad():
@@ -211,7 +219,7 @@ class UpdateOpenpilotBigButton(BigButton):
     if value:
       self.set_text("")
     else:
-      self.set_text("update sunnypilot")
+      self.set_text(self._idle_label())
 
   def _update_state(self):
     super()._update_state()
