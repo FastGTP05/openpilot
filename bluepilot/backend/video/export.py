@@ -276,8 +276,17 @@ def generate_route_export(route_base, camera, progress_callback=None, server_sta
             missing_segments.append(seg['segment'])
 
     if missing_segments:
-        missing_str = ', '.join(f"{seg:03d}" for seg in missing_segments[:10])
-        raise FileNotFoundError(f"Missing {camera} video for segments: {missing_str}")
+        # loggerd can leave one or more empty trailing segments while a route
+        # is closing. Those segments contain no camera data to merge, so they
+        # must not prevent exporting the completed portion of the drive.
+        # Missing video anywhere before the final recorded segment remains an
+        # error: silently skipping a gap in the middle would make the export
+        # misleading.
+        last_video_segment = max(segment for segment, _ in video_paths) if video_paths else -1
+        non_trailing_missing = [segment for segment in missing_segments if segment < last_video_segment]
+        if non_trailing_missing:
+            missing_str = ', '.join(f"{seg:03d}" for seg in non_trailing_missing[:10])
+            raise FileNotFoundError(f"Missing {camera} video for segments: {missing_str}")
 
     if not video_paths:
         raise FileNotFoundError(f"No {camera} video segments available")
