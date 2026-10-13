@@ -1,7 +1,7 @@
 from cereal import log, custom
 from openpilot.common.constants import CV
 from openpilot.common.realtime import DT_MDL
-from openpilot.sunnypilot.selfdrive.controls.lib.auto_lane_change import AutoLaneChangeController, AutoLaneChangeMode
+from openpilot.sunnypilot.selfdrive.controls.lib.auto_lane_change import AutoLaneChangeController
 from openpilot.sunnypilot.selfdrive.controls.lib.lane_turn_desire import LaneTurnController
 # BluePilot: blinker-based lane change pause during turn signals
 from openpilot.common.bluepilot import is_bluepilot
@@ -75,7 +75,7 @@ class DesireHelper:
                                                left_blinker=carstate.leftBlinker, right_blinker=carstate.rightBlinker, v_ego=v_ego)
     self.lane_turn_direction = self.lane_turn_controller.get_turn_direction()
 
-    if not lateral_active or self.lane_change_timer > LANE_CHANGE_TIME_MAX or self.alc.lane_change_set_timer == AutoLaneChangeMode.OFF \
+    if not lateral_active or self.lane_change_timer > LANE_CHANGE_TIME_MAX \
        or (is_bluepilot() and self._bp_blinker_pause.update(carstate)):  # BluePilot: pause lane changes based on blinker logic
       self.lane_change_state = LaneChangeState.off
       self.lane_change_direction = LaneChangeDirection.none
@@ -99,12 +99,15 @@ class DesireHelper:
         blindspot_detected = ((carstate.leftBlindspot and self.lane_change_direction == LaneChangeDirection.left) or
                               (carstate.rightBlindspot and self.lane_change_direction == LaneChangeDirection.right))
 
-        self.alc.update_lane_change(blindspot_detected, carstate.brakePressed)
-
         if not one_blinker or below_lane_change_speed:
           self.lane_change_state = LaneChangeState.off
           self.lane_change_direction = LaneChangeDirection.none
-        elif (torque_applied or self.alc.auto_lane_change_allowed) and not blindspot_detected:
+        # Explorer safety policy: a turn signal can request a lane change, but
+        # never starts it. The driver must deliberately steer toward the
+        # indicated lane. Once that movement begins, the existing lane-change
+        # state machine fades the old lane out and re-centers in the new lane.
+        # This deliberately ignores every automatic-timer mode in SunnyPilot.
+        elif torque_applied and not blindspot_detected:
           self.lane_change_state = LaneChangeState.laneChangeStarting
 
       # LaneChangeState.laneChangeStarting

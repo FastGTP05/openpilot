@@ -111,3 +111,25 @@ def test_desire_helper_integration(carstate, lateral_active, lane_change_prob, e
   for _ in range(10):
     dh.update(carstate, lateral_active, lane_change_prob)
   assert dh.desire == expected_desire  # The first four tests were unit tests to test the controller, where this tests the integration in desire helpers
+
+
+def test_lane_change_requires_driver_steering_even_when_auto_mode_is_enabled():
+  """A blinker alone must never create lateral lane-change desire."""
+  dh = DesireHelper()
+  dh.lane_turn_controller.enabled = False
+  dh.alc.lane_change_set_timer = AutoLaneChangeMode.NUDGELESS
+  # Avoid the periodic param refresh replacing the test value on the first tick.
+  dh.alc.param_read_counter = 1
+
+  signal_only = DummyCarState(vEgo=30, leftBlinker=True)
+  for _ in range(10):
+    dh.update(signal_only, lateral_active=True, lane_change_prob=1.0)
+
+  assert dh.lane_change_state == log.LaneChangeState.preLaneChange
+  assert dh.desire == log.Desire.none
+
+  driver_starts_change = DummyCarState(vEgo=30, leftBlinker=True, steeringPressed=True, steeringTorque=1)
+  dh.update(driver_starts_change, lateral_active=True, lane_change_prob=1.0)
+
+  assert dh.lane_change_state == log.LaneChangeState.laneChangeStarting
+  assert dh.desire == log.Desire.laneChangeLeft
