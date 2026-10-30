@@ -6,6 +6,7 @@ See the LICENSE.md file in the root directory for more details.
 """
 
 from enum import StrEnum
+import time
 
 import cereal.messaging as messaging
 from opendbc.car import Bus, structs
@@ -91,6 +92,10 @@ class CarStateExt:
     self.prev_button_signal = {}
     # Track previous cruise state to detect transitions
     self.cruise_enabled_prev = False
+    # Diagnostics only: retain the moment Ford first reports cruise enabled so
+    # an accept-then-cancel cycle can be identified in the route log. This does
+    # not change a button event or any Ford cruise-control command.
+    self.cruise_enabled_since = None
     # Track if mainCruise was pressed recently (to handle delayed cruise enable)
     self.main_cruise_pressed_recently = False
 
@@ -271,6 +276,28 @@ class CarStateExt:
     # Clear the flag if cruise is already enabled (button press was for something else)
     if cruise_enabled and not cruise_just_enabled:
       self.main_cruise_pressed_recently = False
+
+    # Ford occasionally reports that SET was accepted and then disables cruise
+    # again within a few control frames. Record the surrounding input state so
+    # the cause can be diagnosed from a later route log. Deliberately do not
+    # suppress, delay, or retry the cancellation: Ford remains authoritative.
+    now = time.monotonic()
+    if cruise_just_enabled:
+      self.cruise_enabled_since = now
+    elif self.cruise_enabled_prev and not cruise_enabled:
+      if self.cruise_enabled_since is not None:
+        enabled_for_s = now - self.cruise_enabled_since
+        if enabled_for_s < 1.0:
+          cloudlog.event(
+            "ford_cruise_immediate_cancel",
+            enabled_for_s=round(enabled_for_s, 3),
+            cruise_available=bool(ret.cruiseState.available),
+            cruise_faulted=bool(ret.cruiseState.accFaulted),
+            can_valid=bool(ret.canValid),
+            button_events=[{"type": int(event.type), "pressed": bool(event.pressed)} for event in button_events],
+            raw_button_signals=dict(self.prev_button_signal),
+          )
+      self.cruise_enabled_since = None
 
     # Update previous cruise state
     self.cruise_enabled_prev = cruise_enabled
