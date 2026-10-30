@@ -196,11 +196,6 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
     # BluePilot: In Rad Racer theme, leads are drawn as sprites by RadRacerTheme
     if render_lead_indicator and radar_state and not self._rad_racer:
       self._draw_lead_indicator()
-      # BluePilot: Pass radar/overlay state to BP chevron metrics for boxed layout
-      self.chevron_metrics.ford_overlay_enabled = self.ford_overlay_enabled
-      self.chevron_metrics.lead_is_radar = self._lead_is_radar
-      self.chevron_metrics.overlay_scale = self._overlay_scale
-      self.chevron_metrics.draw_lead_status(sm, radar_state, self._rect, self._lead_vehicles)
 
   def _update_lead_radar_status(self, radar_state):
     """Track whether each lead is radar-sourced for coloring."""
@@ -616,29 +611,8 @@ class ModelRendererBP(RadRacerRoadMixin, ModelRenderer):
     return np.vstack([left, right[::-1]]).astype(np.float32)
 
   def _draw_lead_indicator(self):
-    """Draw lead vehicles with dynamic colors based on detection source (radar vs vision)."""
-    if self.ford_overlay_enabled:
-      #Chevron is handled by the Metric renderer.
-      return
-
-    for i, lead in enumerate(self._lead_vehicles):
-      if not lead.glow or not lead.chevron:
-        continue
-
-      is_radar = self._lead_is_radar[i] if i < len(self._lead_is_radar) else False
-
-      # BluePilot: Blue for radar leads, yellow/red for vision leads
-      if is_radar:
-        glow_color = LEAD_RADAR_GLOW
-        chevron_color = rl.Color(LEAD_RADAR_CHEVRON_BASE.r, LEAD_RADAR_CHEVRON_BASE.g,
-                                 LEAD_RADAR_CHEVRON_BASE.b, lead.fill_alpha)
-      else:
-        glow_color = LEAD_VISION_GLOW
-        # BluePilot: theme pack lead marker color for vision leads (radar leads stay blue)
-        vision_base = LEAD_VISION_CHEVRON_BASE
-        if self._theme_pack is not None:
-          vision_base = self._theme_pack.rl_colors().get("LeadMarker", vision_base)
-        chevron_color = rl.Color(vision_base.r, vision_base.g, vision_base.b, lead.fill_alpha)
-
-      rl.draw_triangle_fan(lead.glow, len(lead.glow), glow_color)
-      rl.draw_triangle_fan(lead.chevron, len(lead.chevron), chevron_color)
+    """Keep the road view clear; lead distance/source remains in the lower-right readout."""
+    # Jason's Explorer build deliberately has no on-road lead chevron, glow, or
+    # boxed lead annotation. This is display-only: radar tracking and Ford ACC
+    # are unaffected.
+    return
